@@ -129,6 +129,26 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Oxygen,Ubunt
 .prung-summary-card .value{font-size:1.6rem;font-weight:700;color:#1e3c72}
 .prung-summary-card.alt{border-left-color:#f59e0b}
 .prung-summary-card.alt .value{color:#d97706}
+.cls-badge{display:inline-flex;align-items:center;gap:4px;font-size:.68rem;font-weight:700;padding:2px 8px;border-radius:999px;letter-spacing:.3px;text-transform:uppercase}
+.cls-work{background:#dbeafe;color:#1e40af;border:1px solid #93c5fd}
+.cls-personal{background:#fce7f3;color:#9d174d;border:1px solid #f9a8d4}
+.cls-mixed{background:#fef3c7;color:#92400e;border:1px solid #fcd34d}
+.cls-unknown{background:#f1f5f9;color:#64748b;border:1px solid #e2e8f0}
+.cls-assistant{background:#f0fdf4;color:#065f46;border:1px solid #a7f3d0}
+.filter-bar{display:flex;gap:8px;align-items:center;margin:12px 0 8px;flex-wrap:wrap}
+.filter-bar button{padding:6px 12px;border-radius:999px;border:1px solid #cbd5e1;background:#fff;font-size:.78rem;font-weight:600;cursor:pointer}
+.filter-bar button.active{background:#1e3c72;color:#fff;border-color:#1e3c72}
+.filter-bar button small{font-weight:400;opacity:.7}
+.cls-summary{display:flex;gap:12px;margin-top:12px;flex-wrap:wrap}
+.cls-summary span{font-size:.78rem;padding:4px 10px;border-radius:999px;background:#f1f5f9;color:#475569}
+.cls-summary span strong{color:#1e293b}
+.loading-overlay{position:absolute;inset:0;background:rgba(241,245,249,0.95);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:50;padding:40px;text-align:center}
+.loading-overlay.hidden{display:none}
+.loading-overlay .spinner{width:48px;height:48px;border:4px solid #e2e8f0;border-top-color:#1e3c72;border-radius:50%;animation:spin .9s linear infinite;margin-bottom:16px}
+@keyframes spin{to{transform:rotate(360deg)}}
+.loading-overlay h3{font-size:1.1rem;font-weight:700;color:#1e293b;margin-bottom:6px}
+.loading-overlay p{font-size:.85rem;color:#64748b;max-width:420px;line-height:1.5}
+.loading-overlay .log{margin-top:12px;font-size:.72rem;color:#94a3b8;font-family:monospace;background:#fff;padding:8px 12px;border-radius:6px;border:1px solid #e2e8f0;max-width:480px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 @media(max-width:900px){.sidebar{width:60px}
 .sidebar-header{padding:16px}
 .sidebar-header h1,.sidebar-header p,.nav-item span{display:none}
@@ -163,7 +183,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Oxygen,Ubunt
 
   <div class="content">
     <header class="topbar">
-      <div class="topbar-title">Claude SML Admin</div>
+      <div class="topbar-title">Claude SML Admin <span id="engineBadge" style="font-size:.65rem;font-weight:700;padding:2px 8px;border-radius:999px;background:#f1f5f9;color:#64748b;border:1px solid #e2e8f0;margin-left:8px;vertical-align:middle">heuristic</span></div>
       <div class="topbar-info">
         <div class="topbar-stats">
           <div class="topbar-stat"><span class="topbar-stat-val" id="statUsers">0</span> employees</div>
@@ -173,6 +193,12 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Oxygen,Ubunt
       </div>
     </header>
 
+    <div id="globalLoading" class="loading-overlay hidden">
+      <div class="spinner"></div>
+      <h3 id="loadingTitle">Loading...</h3>
+      <p id="loadingMsg">Please wait</p>
+      <div class="log" id="loadingLog">Check terminal for logs: tail -f /tmp/srv.log</div>
+    </div>
     <div class="main-area view-users" id="mainArea">
 
       <div class="view-panel view-users">
@@ -244,6 +270,14 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Oxygen,Ubunt
               <div class="label">Total Messages</div>
               <div class="value" id="pTotalMsgs">0</div>
             </div>
+            <div class="prung-summary-card" style="border-left-color:#1e40af">
+              <div class="label">Work Prompts</div>
+              <div class="value" id="pWork" style="color:#1e40af">0</div>
+            </div>
+            <div class="prung-summary-card" style="border-left-color:#be185d">
+              <div class="label">Personal Prompts</div>
+              <div class="value" id="pPersonal" style="color:#be185d">0</div>
+            </div>
             <div class="prung-summary-card alt">
               <div class="label">Est. Total Tokens</div>
               <div class="value" id="pTotalTokens">0</div>
@@ -261,6 +295,12 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Oxygen,Ubunt
             <button class="btn btn-primary" onclick="renderPrung()" style="height:38px;padding:0 20px">Apply</button>
             <button class="btn btn-outline" onclick="document.getElementById('prungFrom').value='';document.getElementById('prungTo').value='';renderPrung()" style="height:38px;padding:0 20px">Clear</button>
           </div>
+          <div class="filter-bar" style="margin-bottom:12px">
+            <span style="font-size:.78rem;font-weight:600;color:#475569">Highlight:</span>
+            <button onclick="setPrungClsFilter('all')" id="pfAll" class="active">All</button>
+            <button onclick="setPrungClsFilter('work')" id="pfWork">Work</button>
+            <button onclick="setPrungClsFilter('personal')" id="pfPers">Personal</button>
+          </div>
           <table class="prung-table">
             <thead>
               <tr>
@@ -269,11 +309,16 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Oxygen,Ubunt
                 <th class="num">Conversations</th>
                 <th class="num">Prompts</th>
                 <th class="num">Responses</th>
+                <th class="num" style="color:#1e40af">Work</th>
+                <th class="num" style="color:#be185d">Personal</th>
+                <th class="num">Mixed</th>
+                <th class="num">Unknown</th>
                 <th class="num">Est. Tokens</th>
               </tr>
             </thead>
             <tbody id="prungBody"></tbody>
           </table>
+          <p style="font-size:.72rem;color:#94a3b8;margin-top:8px">Classification is keyword-heuristic (EN+TH). Tune keywords in <code>classifier.js</code>. Use <code>POST /api/classify</code> for programmatic access.</p>
         </div>
       </div>
 
@@ -281,6 +326,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Oxygen,Ubunt
   </div>
 </div>
 
+<script src="/classifier.js"></script>
 <script>
 function esc(s) {
   const d = document.createElement('div');
@@ -326,26 +372,63 @@ function switchView(view) {
   if (view === 'prung') renderPrung();
 }
 
-async function loadData() {
+function showGlobalLoading(title, msg) {
+  const el = document.getElementById('globalLoading');
+  document.getElementById('loadingTitle').textContent = title;
+  document.getElementById('loadingMsg').textContent = msg;
+  el.classList.remove('hidden');
+}
+function hideGlobalLoading() { document.getElementById('globalLoading').classList.add('hidden'); }
+function setLoadingLog(msg) { const e=document.getElementById('loadingLog'); if(e) e.textContent = msg; }
+let loadingPoll = null;
+function startLoadingPoll() {
+  if (loadingPoll) clearInterval(loadingPoll);
+  loadingPoll = setInterval(async ()=>{
+    try { const r=await fetch('/api/loading-status'); const j=await r.json(); if(j.loading) setLoadingLog(j.message + ' ... check terminal for details'); } catch {}
+  }, 1500);
+}
+function stopLoadingPoll() { if(loadingPoll) clearInterval(loadingPoll); loadingPoll=null; }
+async function updateEngineBadge() {
   try {
-    const [ur, cr] = await Promise.all([fetch('/api/users'), fetch('/api/conversations')]);
-    if (!ur.ok || !cr.ok) throw new Error('Failed to load');
+    const r = await fetch('/api/classify/health');
+    const h = await r.json();
+    const el = document.getElementById('engineBadge');
+    if (!h.enabled) { el.textContent = 'heuristic'; el.title = 'Keyword heuristic (set LLM_ENABLED=true for local LLM)'; el.style.background='#f1f5f9'; }
+    else if (h.status.includes('ok')) { el.textContent = 'LLM: ' + (h.model||'local'); el.style.background='#dcfce7'; el.style.color='#166534'; el.style.borderColor='#86efac'; el.title = h.url + ' ' + h.status; }
+    else { el.textContent = 'LLM unreachable → heuristic'; el.style.background='#fef3c7'; el.title = h.url + ' ' + h.status; }
+  } catch {}
+}
+let overview = null; // cached /api/stats/overview for list without loading 300MB
+async function loadData() {
+  showGlobalLoading('Loading employees...', 'Fetching overview (first load of 300MB may take 15-30s, cached after). Check terminal: tail -f /tmp/srv.log');
+  startLoadingPoll();
+  try {
+    const [ur, ov] = await Promise.all([fetch('/api/users'), fetch('/api/stats/overview')]);
+    if (!ur.ok || !ov.ok) throw new Error('Failed to load');
     users = await ur.json();
-    conversations = await cr.json();
-    const totalMsg = conversations.reduce((s, c) => s + (c.chat_messages ? c.chat_messages.length : 0), 0);
-    document.getElementById('statUsers').textContent = users.length;
-    document.getElementById('statConvs').textContent = conversations.length;
-    document.getElementById('statMsgs').textContent = totalMsg;
+    overview = await ov.json();
+    // keep conversations as overview perUser for list rendering; full data lazy-loaded per user
+    conversations = []; // no longer fetch 300MB on page load
+    document.getElementById('statUsers').textContent = overview.users;
+    document.getElementById('statConvs').textContent = overview.conversations;
+    document.getElementById('statMsgs').textContent = overview.messages;
+    if (overview.conversations > 500) {
+      console.warn(`Large dataset: ${overview.conversations} convs, using paginated lazy-load`);
+      setLoadingLog(`Loaded ${overview.conversations} conversations, ${overview.users} employees — cached`);
+    }
     filterUsers();
+    updateEngineBadge();
+    hideGlobalLoading(); stopLoadingPoll();
   } catch (e) {
     console.error('Load error:', e);
-    document.getElementById('userList').innerHTML = '<div class="empty-panel" style="padding:30px"><p style="color:#ef4444">Failed to load data. Upload files first.</p></div>';
+    hideGlobalLoading(); stopLoadingPoll();
+    document.getElementById('userList').innerHTML = '<div class="empty-panel" style="padding:30px"><p style="color:#ef4444">Failed to load data. Upload files first.</p><p style="font-size:.75rem;color:#94a3b8;margin-top:8px">Large file (300MB+) now supported via pagination — try refreshing. Terminal: tail -f /tmp/srv.log</p></div>';
   }
 }
 
 function filterUsers() {
   const q = document.getElementById('userSearch').value.toLowerCase();
-  filteredUsers = users.filter(u => u.full_name.toLowerCase().includes(q) || u.email_address.toLowerCase().includes(q));
+  filteredUsers = users.filter(u => ((u.full_name||'')+'' ).toLowerCase().includes(q) || ((u.email_address||'')+'').toLowerCase().includes(q));
   renderUsers();
 }
 
@@ -355,38 +438,66 @@ function estTokens(m) {
   return Math.round(chars / 4);
 }
 
-function renderPrung() {
-  const fromStr = document.getElementById('prungFrom').value;
-  const toStr = document.getElementById('prungTo').value;
-  const from = fromStr ? new Date(fromStr + 'T00:00:00') : null;
-  const to = toStr ? new Date(toStr + 'T23:59:59') : null;
+let clsFilter = 'all';
+let prungClsFilter = 'all';
+let currentConvData = null; // {user, convs}
 
-  const rows = users.map(u => {
-    const ucs = conversations.filter(c => c.account?.uuid === u.uuid);
-    let prompts = 0, responses = 0, tokens = 0, convCount = 0;
-    for (const c of ucs) {
-      const msgs = Array.isArray(c.chat_messages) ? c.chat_messages : [];
-      let hasInRange = false;
-      for (const m of msgs) {
-        const mt = safeDate(m.created_at);
-        if (!mt) continue;
-        if ((from && mt < from) || (to && mt > to)) continue;
-        hasInRange = true;
-        if (m.sender === 'human') prompts++;
-        else if (m.sender === 'assistant') responses++;
-        tokens += estTokens(m);
-      }
-      if (hasInRange) convCount++;
-    }
-    return { name: u.full_name, email: u.email_address, convs: convCount, prompts, responses, tokens };
-  });
+function getCls(m) {
+  if (m.classification && m.classification.label) return m.classification;
+  if (m.sender !== 'human') return { label: 'assistant', confidence: 1 };
+  if (typeof window.classifyMessage === 'function') return window.classifyMessage(m);
+  const txt = extractText(m);
+  if (typeof window.classifyPrompt === 'function') return window.classifyPrompt(txt);
+  return { label: 'unknown', confidence: 0 };
+}
+function clsBadge(label, conf) {
+  const map = { work: 'cls-work', personal: 'cls-personal', mixed: 'cls-mixed', unknown: 'cls-unknown', assistant: 'cls-assistant' };
+  const cls = map[label] || 'cls-unknown';
+  const pct = conf ? ` ${Math.round(conf*100)}%` : '';
+  return `<span class="cls-badge ${cls}">${esc(label)}${conf && label!=='assistant' ? pct : ''}</span>`;
+}
 
-  const total = rows.reduce((s, r) => ({ convs: s.convs + r.convs, prompts: s.prompts + r.prompts, responses: s.responses + r.responses, tokens: s.tokens + r.tokens }), { convs: 0, prompts: 0, responses: 0, tokens: 0 });
+function setClsFilter(f) {
+  clsFilter = f;
+  if (currentConvData) renderConversations(currentConvData.user, currentConvData.convs);
+}
+function setPrungClsFilter(f) {
+  prungClsFilter = f;
+  document.querySelectorAll('[id^=pf]').forEach(b=>b.classList.remove('active'));
+  const map={all:'pfAll',work:'pfWork',personal:'pfPers'};
+  if (map[f]) document.getElementById(map[f])?.classList.add('active');
+  // currently just highlight; future could filter table rows by classification dominance
+  // re-render not needed for highlight, but keep for counts
+  // renderPrung();
+}
 
-  document.getElementById('pTotalUsers').textContent = users.length;
-  document.getElementById('pTotalConvs').textContent = total.convs;
-  document.getElementById('pTotalMsgs').textContent = total.prompts + total.responses;
-  document.getElementById('pTotalTokens').textContent = total.tokens.toLocaleString();
+async function renderPrung() {
+  const prungBody = document.getElementById('prungBody');
+  prungBody.innerHTML = '<tr><td colspan="10" style="text-align:center;padding:20px;color:#64748b">Loading analytics... (large file optimized)</td></tr>';
+  try {
+    const [ovRes, clsRes] = await Promise.all([fetch('/api/stats/overview'), fetch('/api/stats/classification')]);
+    const ov = ovRes.ok ? await ovRes.json() : overview;
+    const clsData = clsRes.ok ? await clsRes.json() : { perUser: [], totals: {work:0,personal:0,mixed:0,unknown:0} };
+    const clsMap = {}; for (const p of (clsData.perUser||[])) clsMap[p.uuid]=p;
+    const ovMap = {}; for (const p of (ov.perUser||[])) ovMap[p.uuid]=p;
+    const rows = users.map(u => {
+      const o = ovMap[u.uuid] || { conversations:0, messages:0 };
+      const c = clsMap[u.uuid] || { work:0, personal:0, mixed:0, unknown:0, total:0 };
+      return { name: u.full_name, email: u.email_address, uuid: u.uuid, convs: o.conversations, prompts: c.total, responses: Math.max(0, o.messages - c.total), tokens: 0, work: c.work, personal: c.personal, mixed: c.mixed, unknown: c.unknown };
+    });
+
+  const total = rows.reduce((s, r) => ({ convs: s.convs + r.convs, prompts: s.prompts + r.prompts, responses: s.responses + r.responses, tokens: s.tokens + r.tokens, work: s.work+r.work, personal: s.personal+r.personal, mixed: s.mixed+r.mixed, unknown: s.unknown+r.unknown }), { convs: 0, prompts: 0, responses: 0, tokens: 0, work:0, personal:0, mixed:0, unknown:0 });
+    if (clsData.totals) { total.work = clsData.totals.work; total.personal = clsData.totals.personal; total.mixed = clsData.totals.mixed; total.unknown = clsData.totals.unknown; total.prompts = clsData.totals.total; }
+    if (ov) { total.convs = ov.conversations; }
+    document.getElementById('pTotalUsers').textContent = users.length;
+    document.getElementById('pTotalConvs').textContent = total.convs;
+    document.getElementById('pTotalMsgs').textContent = ov ? ov.messages : total.prompts + total.responses;
+    document.getElementById('pTotalTokens').textContent = '—';
+
+    const elWork = document.getElementById('pWork');
+    if (elWork) elWork.textContent = total.work;
+    const elPers = document.getElementById('pPersonal');
+    if (elPers) elPers.textContent = total.personal;
 
   document.getElementById('prungBody').innerHTML = rows.filter(r => r.convs > 0).map(r =>
     '<tr>' +
@@ -395,7 +506,11 @@ function renderPrung() {
       '<td class="num">' + r.convs + '</td>' +
       '<td class="num">' + r.prompts + '</td>' +
       '<td class="num">' + r.responses + '</td>' +
-      '<td class="num">' + r.tokens.toLocaleString() + '</td>' +
+      '<td class="num" style="color:#1e40af;font-weight:600">' + r.work + '</td>' +
+      '<td class="num" style="color:#be185d;font-weight:600">' + r.personal + '</td>' +
+      '<td class="num" style="color:#92400e">' + r.mixed + '</td>' +
+      '<td class="num" style="color:#64748b">' + r.unknown + '</td>' +
+      '<td class="num">—</td>' +
     '</tr>'
   ).join('') +
   '<tr class="total-row">' +
@@ -403,8 +518,15 @@ function renderPrung() {
     '<td class="num">' + total.convs + '</td>' +
     '<td class="num">' + total.prompts + '</td>' +
     '<td class="num">' + total.responses + '</td>' +
-    '<td class="num">' + total.tokens.toLocaleString() + '</td>' +
+    '<td class="num">' + total.work + '</td>' +
+    '<td class="num">' + total.personal + '</td>' +
+    '<td class="num">' + total.mixed + '</td>' +
+    '<td class="num">' + total.unknown + '</td>' +
+    '<td class="num">—</td>' +
   '</tr>';
+  } catch (e) {
+    prungBody.innerHTML = '<tr><td colspan="10" style="color:#ef4444;text-align:center">Failed to load analytics: '+esc(e.message)+'</td></tr>';
+  }
 }
 
 function safeDate(v) {
@@ -418,19 +540,28 @@ function renderUsers() {
     list.innerHTML = '<div class="empty-panel" style="padding:30px"><p>No employees found</p></div>';
     return;
   }
+  // use overview perUser if available (avoids loading 300MB conversations array)
+  const map = {};
+  if (overview && overview.perUser) for (const p of overview.perUser) map[p.uuid]=p;
   list.innerHTML = filteredUsers.map(u => {
-    const ucs = conversations.filter(c => c.account?.uuid === u.uuid);
-    const msgs = ucs.reduce((s, c) => s + (c.chat_messages ? c.chat_messages.length : 0), 0);
-    const dates = ucs.map(c => safeDate(c.updated_at)).filter(Boolean);
-    const last = dates.length ? new Date(Math.max(...dates.map(d => d.getTime()))).toLocaleDateString() : 'Never';
+    const stats = map[u.uuid] || { conversations: 0, messages: 0, last_active: null };
+    // fallback to old method if overview missing (small dataset)
+    let convCount = stats.conversations, msgCount = stats.messages, last = stats.last_active ? new Date(stats.last_active).toLocaleDateString() : 'Never';
+    if (!overview) {
+      const ucs = conversations.filter(c => c.account?.uuid === u.uuid);
+      convCount = ucs.length;
+      msgCount = ucs.reduce((s, c) => s + (c.chat_messages ? c.chat_messages.length : 0), 0);
+      const dates = ucs.map(c => safeDate(c.updated_at)).filter(Boolean);
+      last = dates.length ? new Date(Math.max(...dates.map(d => d.getTime()))).toLocaleDateString() : 'Never';
+    }
     return `<div class="user-card${selectedUserId === u.uuid ? ' selected' : ''}" onclick="selectUser('${u.uuid}')">
-      <div class="user-avatar">${esc(u.full_name.charAt(0).toUpperCase())}</div>
+      <div class="user-avatar">${esc(((u.full_name||'?')+'').charAt(0).toUpperCase())}</div>
       <div class="user-info">
-        <div class="user-name">${esc(u.full_name)}</div>
+        <div class="user-name">${esc(u.full_name||'Unknown')}</div>
         <div class="user-email">${esc(u.email_address)}</div>
         <div class="user-stats">
-          <span>${ucs.length} conv</span>
-          <span>${msgs} msgs</span>
+          <span>${convCount} conv</span>
+          <span>${msgCount} msgs</span>
           <span>${last}</span>
         </div>
       </div>
@@ -438,18 +569,21 @@ function renderUsers() {
   }).join('');
 }
 
-async function selectUser(uuid) {
+let currentPage = 1, currentTotal = 0, currentLimit = 10;
+async function selectUser(uuid, page=1) {
   selectedUserId = uuid;
+  currentPage = page;
   renderUsers();
   const panel = document.getElementById('convPanel');
-  panel.innerHTML = '<div class="empty-panel"><div class="spinner" style="width:36px;height:36px;border:3px solid #e2e8f0;border-top-color:#1e3c72;border-radius:50%;animation:spin .8s linear infinite;margin-bottom:16px"></div><p>Loading conversations...</p></div>';
+  panel.innerHTML = '<div class="empty-panel"><div class="spinner" style="width:36px;height:36px;border:3px solid #e2e8f0;border-top-color:#1e3c72;border-radius:50%;animation:spin .8s linear infinite;margin-bottom:16px"></div><p>Loading conversations... (page '+page+')</p></div>';
   try {
-    const r = await fetch(`/api/conversations/${uuid}`);
+    const r = await fetch(`/api/conversations/${uuid}?page=${page}&limit=${currentLimit}`);
     if (!r.ok) throw new Error('Not found');
     const d = await r.json();
-    renderConversations(d.user, d.conversations);
+    currentTotal = d.total;
+    renderConversations(d.user, d.conversations, d);
   } catch (e) {
-    panel.innerHTML = '<div class="empty-panel"><p style="color:#ef4444">Failed to load conversations.</p></div>';
+    panel.innerHTML = '<div class="empty-panel"><p style="color:#ef4444">Failed to load conversations.</p><p style="font-size:.8rem;color:#94a3b8">'+esc(e.message)+'</p></div>';
   }
 }
 
@@ -577,46 +711,79 @@ function extractText(m) {
   return '';
 }
 
-function renderConversations(user, convs) {
+function renderConversations(user, convs, meta) {
+  currentConvData = { user, convs, meta: meta || { total: convs.length, page: 1, limit: convs.length, hasMore: false } };
   const panel = document.getElementById('convPanel');
+  const totalConvs = meta ? meta.total : convs.length;
   if (!convs.length) {
-    panel.innerHTML = '<div class="conversation-header"><h2>' + esc(user.full_name) + '</h2><p>' + esc(user.email_address) + '</p></div>' +
-      '<div class="empty-panel"><div class="empty-panel-icon">C</div><h3>No Conversations</h3><p>No Claude conversations found for this employee.</p></div>';
+    const msg = totalConvs>0 ? 'No conversations on this page.' : 'No Claude conversations found for this employee.';
+    panel.innerHTML = '<div class="conversation-header"><h2>' + esc(user.full_name||'Unknown') + '</h2><p>' + esc(user.email_address||'') + '</p><div class="conversation-meta"><span>Conversations: <strong>' + totalConvs + '</strong></span></div></div>' +
+      '<div class="empty-panel"><div class="empty-panel-icon">C</div><h3>'+esc(msg)+'</h3></div>';
     return;
   }
   const total = convs.reduce((s, c) => s + (c.chat_messages ? c.chat_messages.length : 0), 0);
+  // classification summary for header (page slice only)
+  let w=0,p=0,mx=0,unk=0;
+  for (const c of convs) for (const m of (c.chat_messages||[])) if (m.sender==='human') {
+    const lab = getCls(m).label;
+    if (lab==='work') w++; else if (lab==='personal') p++; else if (lab==='mixed') mx++; else unk++;
+  }
   const createdDates = convs.map(c => safeDate(c.created_at)).filter(Boolean);
   const started = createdDates.length ? new Date(Math.min(...createdDates.map(d => d.getTime()))).toLocaleDateString() : 'Unknown';
+  const pg = meta ? meta.page : 1;
+  const lim = meta ? meta.limit : convs.length;
+  const totalPages = Math.ceil(totalConvs / lim) || 1;
+  // filter bar counts for current filter
   panel.innerHTML = '<div class="conversation-header">' +
-    '<h2>' + esc(user.full_name) + '</h2>' +
+    '<h2>' + esc(user.full_name||'Unknown') + '</h2>' +
     '<p>' + esc(user.email_address) + '</p>' +
     '<div class="conversation-meta">' +
-      '<span>Conversations: <strong>' + convs.length + '</strong></span>' +
-      '<span>Messages: <strong>' + total + '</strong></span>' +
+      '<span>Conversations: <strong>' + totalConvs + '</strong> ' + (meta ? '<span style="font-weight:400;color:#64748b">(page '+pg+'/'+totalPages+', showing '+convs.length+')</span>' : '') + '</span>' +
+      '<span>Messages on page: <strong>' + total + '</strong></span>' +
       '<span>Started: <strong>' + started + '</strong></span>' +
+    '</div>' +
+    '<div class="cls-summary">' +
+      '<span>Work: <strong>' + w + '</strong></span>' +
+      '<span>Personal: <strong>' + p + '</strong></span>' +
+      '<span>Mixed: <strong>' + mx + '</strong></span>' +
+      '<span>Unknown: <strong>' + unk + '</strong></span>' +
+    '</div>' +
+    '<div class="filter-bar">' +
+      '<span style="font-size:.78rem;font-weight:600;color:#475569">Filter prompts:</span>' +
+      '<button onclick="setClsFilter(\'all\')" class="' + (clsFilter==='all'?'active':'') + '">All <small>(' + (w+p+mx+unk) + ')</small></button>' +
+      '<button onclick="setClsFilter(\'work\')" class="' + (clsFilter==='work'?'active':'') + '">Work <small>(' + w + ')</small></button>' +
+      '<button onclick="setClsFilter(\'personal\')" class="' + (clsFilter==='personal'?'active':'') + '">Personal <small>(' + p + ')</small></button>' +
+      '<button onclick="setClsFilter(\'mixed\')" class="' + (clsFilter==='mixed'?'active':'') + '">Mixed <small>(' + mx + ')</small></button>' +
+      '<button onclick="setClsFilter(\'unknown\')" class="' + (clsFilter==='unknown'?'active':'') + '">Unknown <small>(' + unk + ')</small></button>' +
     '</div>' +
   '</div>' +
   '<div class="messages-view">' + convs.map(c => {
     const msgs = Array.isArray(c.chat_messages) ? c.chat_messages : [];
     const cd = safeDate(c.created_at);
     const d = cd ? cd.toLocaleDateString('en-US', { weekday:'long', year:'numeric', month:'long', day:'numeric' }) : 'Unknown date';
+    const filteredMsgs = msgs.filter(m => {
+      const msgText = extractText(m);
+      const hasContent = !!msgText || (Array.isArray(m.files) && m.files.some(f => f?.file_name || f?.file_uuid)) || (Array.isArray(m.attachments) && m.attachments.some(a => a?.extracted_content || a?.file_type || a?.file_name));
+      if (!hasContent) return false;
+      if (m.sender !== 'human') return true; // always show Claude responses
+      if (clsFilter === 'all') return true;
+      return getCls(m).label === clsFilter;
+    });
+    if (!filteredMsgs.length) return '';
     return '<div style="margin-bottom:28px">' +
       '<div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;font-size:.8rem;color:#94a3b8">' +
         '<span style="flex:1;height:1px;background:#e2e8f0"></span>' +
         '<span>' + d + '</span>' +
         '<span style="flex:1;height:1px;background:#e2e8f0"></span>' +
       '</div>' +
-      msgs.filter(m => {
-        const msgText = extractText(m);
-        if (msgText) return true;
-        if (Array.isArray(m.files) && m.files.some(f => f?.file_name || f?.file_uuid)) return true;
-        if (Array.isArray(m.attachments) && m.attachments.some(a => a?.extracted_content || a?.file_type || a?.file_name)) return true;
-        return false;
-      }).map(m => {
+      filteredMsgs.map(m => {
         const isUser = m.sender === 'human';
         const mt = safeDate(m.created_at);
         const t = mt ? mt.toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' }) : '';
         const msgText = extractText(m);
+        const cls = getCls(m);
+        const eng = cls.engine ? `<span style="font-size:.58rem;color:#94a3b8;margin-left:4px" title="${esc(cls.engine)}${cls.model ? ' '+esc(cls.model):''}">${esc(cls.engine)}</span>` : '';
+        const badge = isUser ? clsBadge(cls.label, cls.confidence) + (cls.reasons ? `<span style="font-size:.62rem;color:#94a3b8;margin-left:6px">${esc(cls.reasons[0]||'')}</span>` : '') + eng : '';
         const extras = [];
         if (Array.isArray(m.files)) {
           const names = m.files.filter(f => f && f.file_name).map(f => {
@@ -643,7 +810,7 @@ function renderConversations(user, convs) {
         }
         return '<div class="message ' + (isUser ? 'user' : 'claude') + '">' +
           '<div class="message-bubble">' +
-            '<div class="message-sender">' + (isUser ? 'Employee' : 'Claude') + '</div>' +
+            '<div class="message-sender">' + (isUser ? 'Employee' + (badge ? ' ' + badge : '') : 'Claude') + '</div>' +
             (msgText ? '<div class="message-text">' + esc(msgText) + '</div>' : '') +
             extras.join('') +
             '<span class="message-time">' + t + '</span>' +
@@ -651,7 +818,9 @@ function renderConversations(user, convs) {
         '</div>';
       }).join('') +
     '</div>';
-  }).join('') + '</div>';
+  }).join('') + '</div>' +
+  (meta && totalConvs > lim ? '<div style="display:flex;justify-content:center;align-items:center;gap:12px;padding:16px;background:#fff;border-top:1px solid #e2e8f0"><button class="btn btn-outline" '+(pg<=1?'disabled':'onclick="selectUser(\''+user.uuid+'\','+(pg-1)+')"')+'>Prev</button><span style="font-size:.85rem;color:#475569">Page '+pg+' / '+totalPages+' ('+totalConvs+' total)</span><button class="btn btn-outline" '+(!currentConvData.meta.hasMore?'disabled':'onclick="selectUser(\''+user.uuid+'\','+(pg+1)+')"')+'>Next</button></div>' : '') +
+  (totalConvs > 50 ? '<div style="text-align:center;padding:8px;font-size:.72rem;color:#94a3b8">Large file optimized — showing 10 per page via pagination. Use Next/Prev.</div>' : '');
 }
 
 function handleFileSelect(input, type) {
@@ -701,19 +870,23 @@ document.getElementById('uploadForm').addEventListener('submit', async e => {
   if (uploadedFiles.conversations) fd.append('conversations', uploadedFiles.conversations);
   btn.disabled = true; btn.textContent = 'Uploading...';
   status.className = 'upload-status';
+  showGlobalLoading('Uploading...', 'Uploading files (300MB may take 30s). Watch terminal: tail -f /tmp/srv.log');
+  startLoadingPoll();
   try {
     const r = await fetch('/api/upload/users', { method: 'POST', body: fd });
     const d = await r.json();
     if (d.success) {
       status.className = 'upload-status success';
-      status.innerHTML = `Files uploaded successfully: ${d.files.join(', ')}<div class="status-details">Data refreshed. You can now view employee conversations.</div>`;
+      status.innerHTML = `Files uploaded successfully: ${d.files.join(', ')}<div class="status-details">Parsing large file in background (15-30s for 300MB), then cache ready. Check terminal logs.</div>`;
       clearUploads();
-      setTimeout(() => { status.className = 'upload-status'; }, 5000);
-      loadData();
-    } else { throw new Error('Upload failed'); }
+      setTimeout(() => { status.className = 'upload-status'; }, 8000);
+      // delay loadData slightly to let server parse
+      setTimeout(()=>{ hideGlobalLoading(); stopLoadingPoll(); loadData(); }, 1500);
+    } else { throw new Error('Upload failed'); hideGlobalLoading(); stopLoadingPoll(); }
   } catch (err) {
+    hideGlobalLoading(); stopLoadingPoll();
     status.className = 'upload-status error';
-    status.innerHTML = `Upload failed: ${err.message}<div class="status-details">Please check file format and try again.</div>`;
+    status.innerHTML = `Upload failed: ${err.message}<div class="status-details">Please check file format and try again. Terminal: tail -f /tmp/srv.log</div>`;
   }
   btn.disabled = false; btn.textContent = 'Upload Files';
 });
