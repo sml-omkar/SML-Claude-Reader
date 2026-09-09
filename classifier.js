@@ -31,6 +31,19 @@ const PERSONAL_PHRASES = [
 
 // Resume/CV file detection — any upload matching these filenames is forced to personal per policy
 const RESUME_FILE_RE = /(resume|cv|curriculum[_ ]*vitae|cover[_ ]*letter|biodata|portfolio.*personal|เรซูเม|ประวัติส่วนตัว)/i;
+// Email creation detection
+const EMAIL_PHRASES = [
+  'write an email','write email','draft an email','draft email','compose email','create an email','create email','send an email','send email','email draft','email template','help me write email','help with email','subject:','email to','mail to',
+  'เขียนอีเมล','ร่างอีเมล','ส่งอีเมล','ช่วยเขียนอีเมล','แม่แบบอีเมล','หัวข้ออีเมล'
+];
+const EMAIL_FILE_RE = /(email|mail)/i; // rarely in filename but keep
+// Confidential / company document detection
+const CONFIDENTIAL_KEYWORDS = [
+  'confidential','internal document','company document','company data','proprietary','NDA','sensitive','financial report','employee data','HR data','contract','agreement','budget internal','board report','shareholder',
+  'เอกสารลับ','เอกสารภายใน','ข้อมูลบริษัท','เอกสารบริษัท','ข้อมูลภายใน','ความลับ','ความลับบริษัท','สัญญา','งบการเงิน','รายงานภายใน','ข้อมูลพนักงาน'
+];
+const CONFIDENTIAL_FILE_RE = /(confidential|internal|company|proprietary|nda|contract|agreement|financial|hr[_ ]?data|employee[_ ]?data|budget|sensitive|board|shareholder|เอกสารลับ|ข้อมูลบริษัท|สัญญา)/i;
+const DOC_EXT_RE = /\.(pdf|docx?|xlsx?|pptx?|csv|txt)$/i;
 
 function hasResumeFile(m) {
   const names = [];
@@ -38,9 +51,27 @@ function hasResumeFile(m) {
   if (Array.isArray(m.attachments)) for (const a of m.attachments) {
     if (a?.file_name) names.push(a.file_name);
     if (a?.file_type) names.push(a.file_type);
-    // extracted_content filename hint often in file_name
   }
   return names.some(n => RESUME_FILE_RE.test(n));
+}
+function hasEmailIntent(text) {
+  const lower = normalize(text);
+  return EMAIL_PHRASES.some(p => lower.includes(p.toLowerCase()));
+}
+function hasConfidentialIntent(text) {
+  const lower = normalize(text);
+  return CONFIDENTIAL_KEYWORDS.some(k => lower.includes(k.toLowerCase()));
+}
+function hasConfidentialFile(m) {
+  const names = getFileNames(m);
+  if (!names.length) return false;
+  // any document upload with confidential hint OR generic company doc upload when text mentions upload/share
+  const hasDoc = names.some(n => DOC_EXT_RE.test(n) && !RESUME_FILE_RE.test(n));
+  if (!hasDoc) return false;
+  // if filename itself looks confidential, true
+  if (names.some(n => CONFIDENTIAL_FILE_RE.test(n))) return true;
+  // otherwise, if text already has confidential intent, this doc is confidential
+  return false;
 }
 function getFileNames(m) {
   const names = [];
@@ -168,7 +199,7 @@ function classifyPrompt(rawText) {
   };
 }
 
-// For server / client: classify a full message object (text + files) — resume/cv uploads are forced to personal
+// For server / client: classify a full message object (text + files) — resume/cv uploads are forced to personal, email/confidential are separate categories
 function classifyMessage(m) {
   if (m.sender !== 'human') return { label: 'assistant', confidence: 1, reasons: ['not a prompt'], workScore: 0, personalScore: 0, hits: { work: [], personal: [] } };
   if (hasResumeFile(m)) {
@@ -187,9 +218,32 @@ function classifyMessage(m) {
   else if (Array.isArray(m.content)) {
     txt = m.content.filter(c=>c.type==='text' && c.text).map(c=>c.text).join('\n');
   }
-  // also feed file names into text for keyword scoring (e.g. "Alice_CV.pdf")
   const fileNames = getFileNames(m).join(' ');
   const combined = [txt, fileNames].filter(Boolean).join('\n');
+  // email creation — separate category (subset of work but requested)
+  if (hasEmailIntent(combined)) {
+    return {
+      label: 'email',
+      confidence: 0.93,
+      workScore: 1,
+      personalScore: 0,
+      reasons: ['email creation prompt'],
+      hits: { work: ['email'], personal: [] }
+    };
+  }
+  // company confidential / document upload
+  if (hasConfidentialIntent(combined) || hasConfidentialFile(m)) {
+    const names = getFileNames(m);
+    const hint = hasConfidentialIntent(combined) ? 'confidential keywords' : `confidential file: ${names.slice(0,1).join(', ')}`;
+    return {
+      label: 'confidential',
+      confidence: 0.95,
+      workScore: 2,
+      personalScore: 0,
+      reasons: [hint],
+      hits: { work: ['confidential'], personal: [] }
+    };
+  }
   return classifyPrompt(combined);
 }
 
@@ -202,11 +256,13 @@ function classifyMessages(messages) {
 }
 
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { classifyPrompt, classifyMessages, classifyMessage, hasResumeFile, WORK_KEYWORDS, PERSONAL_KEYWORDS };
+  module.exports = { classifyPrompt, classifyMessages, classifyMessage, hasResumeFile, hasEmailIntent, hasConfidentialFile, WORK_KEYWORDS, PERSONAL_KEYWORDS };
 }
 if (typeof window !== 'undefined') {
   window.classifyPrompt = classifyPrompt;
   window.classifyMessages = classifyMessages;
   window.classifyMessage = classifyMessage;
   window.hasResumeFile = hasResumeFile;
+  window.hasEmailIntent = hasEmailIntent;
+  window.hasConfidentialFile = hasConfidentialFile;
 }
