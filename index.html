@@ -132,6 +132,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Oxygen,Ubunt
 .cls-badge{display:inline-flex;align-items:center;gap:4px;font-size:.68rem;font-weight:700;padding:2px 8px;border-radius:999px;letter-spacing:.3px;text-transform:uppercase}
 .cls-work{background:#dbeafe;color:#1e40af;border:1px solid #93c5fd}
 .cls-personal{background:#fce7f3;color:#9d174d;border:1px solid #f9a8d4}
+.cls-email{background:#e0e7ff;color:#3730a3;border:1px solid #a5b4fc}
+.cls-confidential{background:#fee2e2;color:#991b1b;border:1px solid #fca5a5}
 .cls-mixed{background:#fef3c7;color:#92400e;border:1px solid #fcd34d}
 .cls-unknown{background:#f1f5f9;color:#64748b;border:1px solid #e2e8f0}
 .cls-assistant{background:#f0fdf4;color:#065f46;border:1px solid #a7f3d0}
@@ -278,6 +280,14 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Oxygen,Ubunt
               <div class="label">Personal Prompts</div>
               <div class="value" id="pPersonal" style="color:#be185d">0</div>
             </div>
+            <div class="prung-summary-card" style="border-left-color:#3730a3">
+              <div class="label">Email Prompts</div>
+              <div class="value" id="pEmail" style="color:#3730a3">0</div>
+            </div>
+            <div class="prung-summary-card" style="border-left-color:#991b1b">
+              <div class="label">Confidential</div>
+              <div class="value" id="pConfidential" style="color:#991b1b">0</div>
+            </div>
             <div class="prung-summary-card alt">
               <div class="label">Est. Total Tokens</div>
               <div class="value" id="pTotalTokens">0</div>
@@ -300,6 +310,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Oxygen,Ubunt
             <button onclick="setPrungClsFilter('all')" id="pfAll" class="active">All</button>
             <button onclick="setPrungClsFilter('work')" id="pfWork">Work</button>
             <button onclick="setPrungClsFilter('personal')" id="pfPers">Personal</button>
+            <button onclick="setPrungClsFilter('email')" id="pfEmail">Email</button>
+            <button onclick="setPrungClsFilter('confidential')" id="pfConf">Confidential</button>
           </div>
           <table class="prung-table">
             <thead>
@@ -311,6 +323,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Oxygen,Ubunt
                 <th class="num">Responses</th>
                 <th class="num" style="color:#1e40af">Work</th>
                 <th class="num" style="color:#be185d">Personal</th>
+                <th class="num" style="color:#3730a3">Email</th>
+                <th class="num" style="color:#991b1b">Confidential</th>
                 <th class="num">Mixed</th>
                 <th class="num">Unknown</th>
                 <th class="num">Est. Tokens</th>
@@ -451,7 +465,7 @@ function getCls(m) {
   return { label: 'unknown', confidence: 0 };
 }
 function clsBadge(label, conf) {
-  const map = { work: 'cls-work', personal: 'cls-personal', mixed: 'cls-mixed', unknown: 'cls-unknown', assistant: 'cls-assistant' };
+  const map = { work: 'cls-work', personal: 'cls-personal', email: 'cls-email', confidential: 'cls-confidential', mixed: 'cls-mixed', unknown: 'cls-unknown', assistant: 'cls-assistant' };
   const cls = map[label] || 'cls-unknown';
   const pct = conf ? ` ${Math.round(conf*100)}%` : '';
   return `<span class="cls-badge ${cls}">${esc(label)}${conf && label!=='assistant' ? pct : ''}</span>`;
@@ -464,7 +478,7 @@ function setClsFilter(f) {
 function setPrungClsFilter(f) {
   prungClsFilter = f;
   document.querySelectorAll('[id^=pf]').forEach(b=>b.classList.remove('active'));
-  const map={all:'pfAll',work:'pfWork',personal:'pfPers'};
+  const map={all:'pfAll',work:'pfWork',personal:'pfPers',email:'pfEmail',confidential:'pfConf'};
   if (map[f]) document.getElementById(map[f])?.classList.add('active');
   // currently just highlight; future could filter table rows by classification dominance
   // re-render not needed for highlight, but keep for counts
@@ -473,21 +487,21 @@ function setPrungClsFilter(f) {
 
 async function renderPrung() {
   const prungBody = document.getElementById('prungBody');
-  prungBody.innerHTML = '<tr><td colspan="10" style="text-align:center;padding:20px;color:#64748b">Loading analytics... (large file optimized)</td></tr>';
+  prungBody.innerHTML = '<tr><td colspan="12" style="text-align:center;padding:20px;color:#64748b">Loading analytics... (large file optimized)</td></tr>';
   try {
     const [ovRes, clsRes] = await Promise.all([fetch('/api/stats/overview'), fetch('/api/stats/classification')]);
     const ov = ovRes.ok ? await ovRes.json() : overview;
-    const clsData = clsRes.ok ? await clsRes.json() : { perUser: [], totals: {work:0,personal:0,mixed:0,unknown:0} };
+    const clsData = clsRes.ok ? await clsRes.json() : { perUser: [], totals: {work:0,personal:0,email:0,confidential:0,mixed:0,unknown:0} };
     const clsMap = {}; for (const p of (clsData.perUser||[])) clsMap[p.uuid]=p;
     const ovMap = {}; for (const p of (ov.perUser||[])) ovMap[p.uuid]=p;
     const rows = users.map(u => {
       const o = ovMap[u.uuid] || { conversations:0, messages:0 };
-      const c = clsMap[u.uuid] || { work:0, personal:0, mixed:0, unknown:0, total:0 };
-      return { name: u.full_name, email: u.email_address, uuid: u.uuid, convs: o.conversations, prompts: c.total, responses: Math.max(0, o.messages - c.total), tokens: 0, work: c.work, personal: c.personal, mixed: c.mixed, unknown: c.unknown };
+      const c = clsMap[u.uuid] || { work:0, personal:0, email:0, confidential:0, mixed:0, unknown:0, total:0 };
+      return { name: u.full_name, email: u.email_address, uuid: u.uuid, convs: o.conversations, prompts: c.total, responses: Math.max(0, o.messages - c.total), tokens: 0, work: c.work, personal: c.personal, email: c.email||0, confidential: c.confidential||0, mixed: c.mixed, unknown: c.unknown };
     });
 
-  const total = rows.reduce((s, r) => ({ convs: s.convs + r.convs, prompts: s.prompts + r.prompts, responses: s.responses + r.responses, tokens: s.tokens + r.tokens, work: s.work+r.work, personal: s.personal+r.personal, mixed: s.mixed+r.mixed, unknown: s.unknown+r.unknown }), { convs: 0, prompts: 0, responses: 0, tokens: 0, work:0, personal:0, mixed:0, unknown:0 });
-    if (clsData.totals) { total.work = clsData.totals.work; total.personal = clsData.totals.personal; total.mixed = clsData.totals.mixed; total.unknown = clsData.totals.unknown; total.prompts = clsData.totals.total; }
+  const total = rows.reduce((s, r) => ({ convs: s.convs + r.convs, prompts: s.prompts + r.prompts, responses: s.responses + r.responses, tokens: s.tokens + r.tokens, work: s.work+r.work, personal: s.personal+r.personal, email: s.email+r.email, confidential: s.confidential+r.confidential, mixed: s.mixed+r.mixed, unknown: s.unknown+r.unknown }), { convs: 0, prompts: 0, responses: 0, tokens: 0, work:0, personal:0, email:0, confidential:0, mixed:0, unknown:0 });
+    if (clsData.totals) { total.work = clsData.totals.work||0; total.personal = clsData.totals.personal||0; total.email = clsData.totals.email||0; total.confidential = clsData.totals.confidential||0; total.mixed = clsData.totals.mixed||0; total.unknown = clsData.totals.unknown||0; total.prompts = clsData.totals.total; }
     if (ov) { total.convs = ov.conversations; }
     document.getElementById('pTotalUsers').textContent = users.length;
     document.getElementById('pTotalConvs').textContent = total.convs;
@@ -498,6 +512,10 @@ async function renderPrung() {
     if (elWork) elWork.textContent = total.work;
     const elPers = document.getElementById('pPersonal');
     if (elPers) elPers.textContent = total.personal;
+    const elEmail = document.getElementById('pEmail');
+    if (elEmail) elEmail.textContent = total.email;
+    const elConf = document.getElementById('pConfidential');
+    if (elConf) elConf.textContent = total.confidential;
 
   document.getElementById('prungBody').innerHTML = rows.filter(r => r.convs > 0).map(r =>
     '<tr>' +
@@ -508,6 +526,8 @@ async function renderPrung() {
       '<td class="num">' + r.responses + '</td>' +
       '<td class="num" style="color:#1e40af;font-weight:600">' + r.work + '</td>' +
       '<td class="num" style="color:#be185d;font-weight:600">' + r.personal + '</td>' +
+      '<td class="num" style="color:#3730a3;font-weight:600">' + r.email + '</td>' +
+      '<td class="num" style="color:#991b1b;font-weight:600">' + r.confidential + '</td>' +
       '<td class="num" style="color:#92400e">' + r.mixed + '</td>' +
       '<td class="num" style="color:#64748b">' + r.unknown + '</td>' +
       '<td class="num">—</td>' +
@@ -520,12 +540,14 @@ async function renderPrung() {
     '<td class="num">' + total.responses + '</td>' +
     '<td class="num">' + total.work + '</td>' +
     '<td class="num">' + total.personal + '</td>' +
+    '<td class="num">' + total.email + '</td>' +
+    '<td class="num">' + total.confidential + '</td>' +
     '<td class="num">' + total.mixed + '</td>' +
     '<td class="num">' + total.unknown + '</td>' +
     '<td class="num">—</td>' +
   '</tr>';
   } catch (e) {
-    prungBody.innerHTML = '<tr><td colspan="10" style="color:#ef4444;text-align:center">Failed to load analytics: '+esc(e.message)+'</td></tr>';
+    prungBody.innerHTML = '<tr><td colspan="12" style="color:#ef4444;text-align:center">Failed to load analytics: '+esc(e.message)+'</td></tr>';
   }
 }
 
@@ -723,10 +745,10 @@ function renderConversations(user, convs, meta) {
   }
   const total = convs.reduce((s, c) => s + (c.chat_messages ? c.chat_messages.length : 0), 0);
   // classification summary for header (page slice only)
-  let w=0,p=0,mx=0,unk=0;
+  let w=0,p=0,e=0,cf=0,mx=0,unk=0;
   for (const c of convs) for (const m of (c.chat_messages||[])) if (m.sender==='human') {
     const lab = getCls(m).label;
-    if (lab==='work') w++; else if (lab==='personal') p++; else if (lab==='mixed') mx++; else unk++;
+    if (lab==='work') w++; else if (lab==='personal') p++; else if (lab==='email') e++; else if (lab==='confidential') cf++; else if (lab==='mixed') mx++; else unk++;
   }
   const createdDates = convs.map(c => safeDate(c.created_at)).filter(Boolean);
   const started = createdDates.length ? new Date(Math.min(...createdDates.map(d => d.getTime()))).toLocaleDateString() : 'Unknown';
@@ -745,14 +767,18 @@ function renderConversations(user, convs, meta) {
     '<div class="cls-summary">' +
       '<span>Work: <strong>' + w + '</strong></span>' +
       '<span>Personal: <strong>' + p + '</strong></span>' +
+      '<span>Email: <strong>' + e + '</strong></span>' +
+      '<span>Confidential: <strong>' + cf + '</strong></span>' +
       '<span>Mixed: <strong>' + mx + '</strong></span>' +
       '<span>Unknown: <strong>' + unk + '</strong></span>' +
     '</div>' +
     '<div class="filter-bar">' +
       '<span style="font-size:.78rem;font-weight:600;color:#475569">Filter prompts:</span>' +
-      '<button onclick="setClsFilter(\'all\')" class="' + (clsFilter==='all'?'active':'') + '">All <small>(' + (w+p+mx+unk) + ')</small></button>' +
+      '<button onclick="setClsFilter(\'all\')" class="' + (clsFilter==='all'?'active':'') + '">All <small>(' + (w+p+e+cf+mx+unk) + ')</small></button>' +
       '<button onclick="setClsFilter(\'work\')" class="' + (clsFilter==='work'?'active':'') + '">Work <small>(' + w + ')</small></button>' +
       '<button onclick="setClsFilter(\'personal\')" class="' + (clsFilter==='personal'?'active':'') + '">Personal <small>(' + p + ')</small></button>' +
+      '<button onclick="setClsFilter(\'email\')" class="' + (clsFilter==='email'?'active':'') + '">Email <small>(' + e + ')</small></button>' +
+      '<button onclick="setClsFilter(\'confidential\')" class="' + (clsFilter==='confidential'?'active':'') + '">Confidential <small>(' + cf + ')</small></button>' +
       '<button onclick="setClsFilter(\'mixed\')" class="' + (clsFilter==='mixed'?'active':'') + '">Mixed <small>(' + mx + ')</small></button>' +
       '<button onclick="setClsFilter(\'unknown\')" class="' + (clsFilter==='unknown'?'active':'') + '">Unknown <small>(' + unk + ')</small></button>' +
     '</div>' +
