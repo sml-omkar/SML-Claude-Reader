@@ -260,32 +260,33 @@ app.post('/api/classify', async (req, res) => {
 
 app.get('/api/classify/health', async (req, res) => {
   const h = await healthCheck();
-  // also report heuristic keyword count
-  res.json({ ...h, fallback: 'heuristic ready', resumeRule: 'resume/cv files -> personal' });
+  res.json({ ...h, fallback: 'heuristic ready', rules: 'resume/cv->personal, email creation->email, company docs->confidential' });
 });
 
 app.get('/api/stats/classification', async (req, res) => {
   const users = loadAllFromDirCached(USER_DIR, './users.json', 'users') || [];
   const conversations = loadAllFromDirCached(CONV_DIR, './conversations.json', 'convs') || [];
-  if (!users.length) return res.json({ perUser: [], totals: { work:0, personal:0, mixed:0, unknown:0, total:0 }, engine: 'heuristic' });
+  if (!users.length) return res.json({ perUser: [], totals: { work:0, personal:0, email:0, confidential:0, mixed:0, unknown:0, total:0 }, engine: 'heuristic' });
   const useLLM = process.env.LLM_ENABLED === 'true' && req.query.llm === 'true';
   const perUser = [];
   for (const u of users) {
     const ucs = conversations.filter(c => c.account?.uuid === u.uuid);
-    let work = 0, personal = 0, mixed = 0, unknown = 0;
+    let work = 0, personal = 0, email = 0, confidential = 0, mixed = 0, unknown = 0;
     for (const c of ucs) {
       for (const m of (c.chat_messages || [])) {
         if (m.sender !== 'human') continue;
         const r = useLLM ? await classifyMessageHybrid(m) : classifyMessage(m);
         if (r.label === 'work') work++;
         else if (r.label === 'personal') personal++;
+        else if (r.label === 'email') email++;
+        else if (r.label === 'confidential') confidential++;
         else if (r.label === 'mixed') mixed++;
         else unknown++;
       }
     }
-    perUser.push({ uuid: u.uuid, full_name: u.full_name, email_address: u.email_address, work, personal, mixed, unknown, total: work+personal+mixed+unknown });
+    perUser.push({ uuid: u.uuid, full_name: u.full_name, email_address: u.email_address, work, personal, email, confidential, mixed, unknown, total: work+personal+email+confidential+mixed+unknown });
   }
-  const totals = perUser.reduce((a,b)=>({ work:a.work+b.work, personal:a.personal+b.personal, mixed:a.mixed+b.mixed, unknown:a.unknown+b.unknown, total:a.total+b.total }), { work:0, personal:0, mixed:0, unknown:0, total:0 });
+  const totals = perUser.reduce((a,b)=>({ work:a.work+b.work, personal:a.personal+b.personal, email:a.email+b.email, confidential:a.confidential+b.confidential, mixed:a.mixed+b.mixed, unknown:a.unknown+b.unknown, total:a.total+b.total }), { work:0, personal:0, email:0, confidential:0, mixed:0, unknown:0, total:0 });
   res.json({ perUser, totals, engine: useLLM ? 'llm' : 'heuristic' });
 });
 
