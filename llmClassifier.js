@@ -28,13 +28,17 @@ function systemPrompt() {
 Classify the user prompt into exactly one label:
 - "work": SML company work — reports, meetings, clients, projects, deadlines, KPI/OKR, code, bug fix, deployment, dashboard, invoice, presentation, work file upload
 - "personal": non-work — family, kids, love/relationship, vacation/travel, hobby, game, health, birthday, recipe, shopping, meme, astrology, AND any resume/CV/cover letter/biodata upload (always personal even if text sounds work-like)
+- "email": prompt is ONLY to create/write/draft/send an email (e.g. "write an email to client", "draft email", "subject:", "ช่วยเขียนอีเมล")
+- "confidential": prompt uploads or discusses company confidential data — internal docs, contracts, NDA, financial reports, employee/HR data, proprietary, board report, เอกสารลับ/ข้อมูลบริษัท
 - "mixed": contains both work and personal intents equally
 - "unknown": too short, empty, or no signal
 
 Rules:
-- If files include resume/cv/cover letter/เรซูเม -> always "personal".
-- Thai prompts follow same rules (งาน=work, เที่ยว/ครอบครัว/เรซูเม=personal).
-- Return ONLY JSON: {"label":"work|personal|mixed|unknown","confidence":0.0-1.0,"reason":"short reason"}`;
+- If files include resume/cv/cover letter/เรซูเม -> always "personal" (highest priority).
+- If text asks to write/draft/send email -> "email".
+- If text or attached file is company confidential/internal document -> "confidential".
+- Thai prompts follow same rules (งาน=work, เที่ยว/ครอบครัว/เรซูเม=personal, เขียนอีเมล=email, เอกสารลับ=confidential).
+- Return ONLY JSON: {"label":"work|personal|email|confidential|mixed|unknown","confidence":0.0-1.0,"reason":"short reason"}`;
 }
 
 function userPrompt(m) {
@@ -108,7 +112,7 @@ function parseLLMJson(raw) {
   try {
     const j = JSON.parse(m[0]);
     let label = String(j.label || '').toLowerCase().trim();
-    if (!['work','personal','mixed','unknown'].includes(label)) return null;
+    if (!['work','personal','email','confidential','mixed','unknown'].includes(label)) return null;
     let conf = Number(j.confidence);
     if (isNaN(conf) || conf < 0 || conf > 1) conf = 0.7;
     return { label, confidence: Math.round(conf*100)/100, reason: String(j.reason || j.explanation || '').slice(0,120) };
